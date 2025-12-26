@@ -1,0 +1,74 @@
+# ===========================================
+# DOCKER COMPOSE - Multi-environnement
+# ===========================================
+# Gère les environnements DEV et PROD sur le même VPS
+
+services:
+  # ===========================================
+  # 🔵 Backend DEV
+  # ===========================================
+  api-dev:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: api-dev
+    restart: unless-stopped
+    ports:
+      - "5001:5000"
+    environment:
+      - NODE_ENV=development
+      - PORT=5000
+      - MONGODB_URI=${MONGODB_URI_DEV}
+      - JWT_SECRET=${JWT_SECRET_DEV}
+    networks:
+      - app-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api-dev.rule=Host(`api-dev.${DOMAIN}`)"
+      - "traefik.http.routers.api-dev.tls=true"
+      - "traefik.http.routers.api-dev.tls.certresolver=letsencrypt"
+
+  # ===========================================
+  # 🟢 Backend PROD
+  # ===========================================
+  api-prod:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: api-prod
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - MONGODB_URI=${MONGODB_URI_PROD}
+      - JWT_SECRET=${JWT_SECRET_PROD}
+    networks:
+      - app-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api-prod.rule=Host(`api.${DOMAIN}`)"
+      - "traefik.http.routers.api-prod.tls=true"
+      - "traefik.http.routers.api-prod.tls.certresolver=letsencrypt"
+
+  # ===========================================
+  # 🔀 Traefik (Reverse Proxy + SSL)
+  # ===========================================
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/traefik.yml:ro
+      - ./traefik/acme.json:/acme.json
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

@@ -1,0 +1,76 @@
+# ===========================================
+# MONITORING STACK (Optionnel)
+# ===========================================
+# Stack légère pour surveiller le VPS
+# 
+# Utilisation :
+#   docker compose -f ops/monitoring/docker-compose.monitoring.yml up -d
+#
+# Accès :
+#   - Uptime Kuma : http://IP:3001 (dashboard de monitoring)
+#   - Dozzle      : http://IP:9999 (logs Docker en temps réel)
+
+services:
+  # ===========================================
+  # Uptime Kuma - Monitoring & Alertes
+  # ===========================================
+  # Dashboard simple pour surveiller les endpoints
+  # Alternative légère à Prometheus/Grafana
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      - uptime-kuma-data:/app/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.uptime.rule=Host(`status.${DOMAIN}`)"
+      - "traefik.http.routers.uptime.tls=true"
+      - "traefik.http.routers.uptime.tls.certresolver=letsencrypt"
+      - "traefik.http.services.uptime.loadbalancer.server.port=3001"
+
+  # ===========================================
+  # Dozzle - Logs Docker en temps réel
+  # ===========================================
+  # Visualiser les logs de tous les containers
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    restart: unless-stopped
+    ports:
+      - "9999:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - DOZZLE_LEVEL=info
+      - DOZZLE_NO_ANALYTICS=true
+
+  # ===========================================
+  # Netdata - Métriques système (alternative)
+  # ===========================================
+  # Dashboard temps réel CPU/RAM/Disk/Network
+  # Décommenter si tu veux des métriques détaillées
+  # netdata:
+  #   image: netdata/netdata
+  #   container_name: netdata
+  #   restart: unless-stopped
+  #   ports:
+  #     - "19999:19999"
+  #   cap_add:
+  #     - SYS_PTRACE
+  #   security_opt:
+  #     - apparmor:unconfined
+  #   volumes:
+  #     - /proc:/host/proc:ro
+  #     - /sys:/host/sys:ro
+  #     - /var/run/docker.sock:/var/run/docker.sock:ro
+
+volumes:
+  uptime-kuma-data:
+
+networks:
+  default:
+    name: app-network
+    external: true

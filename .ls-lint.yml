@@ -1,0 +1,90 @@
+# ls-lint configuration
+# Documentation: https://ls-lint.org/
+
+ls:
+  # =====================
+  # CLIENT (Frontend)
+  # =====================
+  
+  # Composants React : PascalCase
+  client/src/components:
+    .tsx: PascalCase
+    .ts: PascalCase | index
+  
+  client/src/components/*:
+    .tsx: PascalCase
+    .ts: PascalCase | index
+  
+  client/src/components/*/*:
+    .tsx: PascalCase
+    .ts: PascalCase | index
+
+  # Hooks : camelCase avec préfixe "use"
+  client/src/hooks:
+    .ts: regex:^use[A-Z][a-zA-Z]*$
+
+  # Utils : camelCase
+  client/src/utils:
+    .ts: camelCase
+
+  # Services : camelCase
+  client/src/services:
+    .ts: camelCase
+
+  # Schemas : camelCase.schema
+  client/src/schemas:
+    .ts: regex:^[a-z][a-zA-Z]*\.schema$
+
+  # Styles : camelCase ou kebab-case
+  client/src/styles:
+    .css: camelCase | kebab-case
+
+  # Tests E2E : kebab-case.spec
+  client/tests/e2e:
+    .ts: regex:^[a-z][a-z0-9-]*\.spec$
+
+  # =====================
+  # SERVER (Backend)
+  # =====================
+  
+  # Controllers : kebab-case.controller
+  server/src/controllers:
+    .ts: regex:^[a-z][a-z0-9-]*\.controller$
+
+  # Routes : kebab-case.routes
+  server/src/routes:
+    .ts: regex:^[a-z][a-z0-9-]*\.routes$
+
+  # Models : PascalCase
+  server/src/models:
+    .ts: PascalCase
+
+  # Middlewares : camelCase
+  server/src/middlewares:
+    .ts: camelCase
+
+  # Config : camelCase
+  server/src/config:
+    .ts: camelCase
+
+  # Schemas : kebab-case.schema
+  server/src/schemas:
+    .ts: regex:^[a-z][a-z0-9-]*\.schema$
+
+  # Utils : camelCase
+  server/src/utils:
+    .ts: camelCase
+
+ignore:
+  - node_modules
+  - dist
+  - build
+  - coverage
+  - .git
+  - "*.config.ts"
+  - "*.config.js"
+  - index.ts
+  - index.tsx
+  - main.tsx
+  - App.tsx
+  - vite-env.d.ts

@@ -1,0 +1,39 @@
+# ===========================================
+# TRAEFIK - Reverse Proxy Configuration
+# ===========================================
+# Gère le routage et les certificats SSL
+
+api:
+  dashboard: true
+  insecure: true  # Dashboard accessible sur :8080 (désactiver en prod si pas besoin)
+
+entryPoints:
+  # HTTP - Redirige vers HTTPS
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+
+  # HTTPS
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: app-network
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: ${ACME_EMAIL}  # Ton email pour Let's Encrypt
+      storage: /acme.json
+      httpChallenge:
+        entryPoint: web
+
+log:
+  level: INFO

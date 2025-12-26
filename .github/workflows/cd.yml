@@ -1,0 +1,198 @@
+name: CD
+
+# ===========================================
+# DEPLOYMENT
+# ===========================================
+# 🔵 DEV  : Merge sur main → VPS (api-dev) + Vercel Preview
+# 🟢 PROD : Tag v* → VPS (api-prod) + Vercel Production
+#
+# Stack : Vercel (frontend) + VPS Hetzner (backend) + MongoDB Atlas
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ==========================================
+  # 🔵 DEPLOY DEV
+  # ==========================================
+  deploy-dev:
+    name: 🔵 Deploy DEV
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: dev
+      url: ${{ vars.DEV_URL }}
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📚 Install dependencies
+        run: npm ci
+
+      # ========================================
+      # FRONTEND → Vercel (Preview)
+      # ========================================
+      - name: 🏗️ Build client (DEV)
+        run: npm run build --workspace=client
+        env:
+          VITE_API_URL: ${{ vars.DEV_API_URL }}
+          VITE_ENV: development
+
+      - name: 🚀 Deploy Frontend to Vercel (Preview)
+        uses: amondnet/vercel-action@v25
+        id: vercel-dev
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: ./client
+
+      # ========================================
+      # BACKEND → VPS via SSH
+      # ========================================
+      - name: 🚀 Deploy Backend to VPS (DEV)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd ~/apps/${{ github.event.repository.name }}
+            git pull origin main
+            docker compose build api-dev
+            docker compose up -d api-dev
+            docker image prune -f
+
+      # ========================================
+      # Summary
+      # ========================================
+      - name: 📝 Deployment summary
+        run: |
+          echo "## 🔵 DEV Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | URL |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | ${{ steps.vercel-dev.outputs.preview-url }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend | ${{ vars.DEV_API_URL }} |" >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================
+  # 🟢 DEPLOY PROD
+  # ==========================================
+  deploy-prod:
+    name: 🟢 Deploy PROD
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: prod
+      url: ${{ vars.PROD_URL }}
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📚 Install dependencies
+        run: npm ci
+
+      # ========================================
+      # FRONTEND → Vercel (Production)
+      # ========================================
+      - name: 🏗️ Build client (PROD)
+        run: npm run build --workspace=client
+        env:
+          VITE_API_URL: ${{ vars.PROD_API_URL }}
+          VITE_ENV: production
+
+      - name: 🚀 Deploy Frontend to Vercel (Production)
+        uses: amondnet/vercel-action@v25
+        id: vercel-prod
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+          working-directory: ./client
+
+      # ========================================
+      # BACKEND → VPS via SSH
+      # ========================================
+      - name: 🚀 Deploy Backend to VPS (PROD)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd ~/apps/${{ github.event.repository.name }}
+            git fetch --tags
+            git checkout ${{ github.ref_name }}
+            docker compose build api-prod
+            docker compose up -d api-prod
+            docker image prune -f
+
+      # ========================================
+      # Summary
+      # ========================================
+      - name: 📝 Deployment summary
+        run: |
+          echo "## 🟢 PROD Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | URL |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | ${{ vars.PROD_URL }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend | ${{ vars.PROD_API_URL }} |" >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================
+  # 📦 CREATE RELEASE
+  # ==========================================
+  release:
+    name: 📦 Create Release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: deploy-prod
+    permissions:
+      contents: write
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 📦 Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
+          body: |
+            ## 🚀 Release ${{ github.ref_name }}
+            
+            ### Stack
+            - 🖥️ **Frontend:** Vercel
+            - ⚙️ **Backend:** VPS Hetzner (Docker)
+            - 🗄️ **Database:** MongoDB Atlas
+            
+            ### URLs
+            - 🟢 **Production:** ${{ vars.PROD_URL }}
+            - 🔵 **Dev:** ${{ vars.DEV_URL }}
